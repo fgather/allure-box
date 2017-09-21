@@ -1,11 +1,15 @@
+import com.beust.jcommander.internal.Lists
 @Grapes([
-    @Grab(group='ru.yandex.qatools.allure', module='allure-bundle', version='1.4.22'),
+    @Grab(group='io.qameta.allure', module='allure-generator', version='2.3.4'),
     @Grab(group='javax.servlet', module='javax.servlet-api', version='3.0.1'),
     @Grab(group='org.eclipse.jetty.aggregate', module='jetty-all-server', version='8.1.8.v20121106', transitive=false)
 ])
 
 
-import ru.yandex.qatools.allure.AllureMain
+import io.qameta.allure.ReportGenerator
+import io.qameta.allure.core.Configuration;
+import io.qameta.allure.ConfigurationBuilder;
+import io.qameta.allure.junitxml.*
 import java.util.concurrent.atomic.AtomicInteger
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.*
@@ -14,6 +18,7 @@ import javax.servlet.*
 import java.util.UUID
 import groovy.servlet.*
 import groovy.json.*
+import java.nio.file.Paths
 
 class Glob {
     static final REPORTDIR = '/reports'
@@ -30,23 +35,40 @@ class ABServlet extends HttpServlet {
         println 'Receiving report data..'
         def report = UUID.randomUUID()
         
-        def root = "/${Glob.REPORTDIR}/${report}/"
-        def input = "${root}/input"
-        def output = "${root}/output"
-        new File(input).mkdirs()
+        def root = "${Glob.REPORTDIR}/${report}/"
+        def inputDirectoryName = "${root}/input"
+        def input = Paths.get(inputDirectoryName)
+        def outputDirectoryName = "${root}/output"
+        def output = Paths.get(outputDirectoryName)
+        new File(inputDirectoryName).mkdirs()
+        new File(outputDirectoryName).mkdirs()
         
         request.getParts().each{ part ->
-            println "Writing ${part.name}"
+            def fileName="${input}/${extractFileName(part)}";
+            println "Writing ${part.name} to ${fileName}"
             // write writes relatively to the Glob.REPORTDIR (as it is in MultipartCOnfigElement)
             // so we tailor the paths for it to work properly
-            part.write("${report}/input/${part.name}")
+            part.write("${report}/input/${extractFileName(part)}")
         }
         
         println "Generating report ${report}.."
-        AllureMain.main(input, output)
+        Configuration configOptions = new ConfigurationBuilder().useDefault().build();
+        ReportGenerator generator = new ReportGenerator(configOptions);
+        generator.generate(output, Lists.newArrayList(input));
         println "Report ${report} done"
         
         response.writer.write(JsonOutput.toJson([result: 'OK', url: "${Glob.BASEURL}/${report}/output/index.html"]))
+    }
+
+    private String extractFileName(Part part) {
+        String contentDisp = part.getHeader("content-disposition");
+        String[] items = contentDisp.split(";");
+        for (String s : items) {
+            if (s.trim().startsWith("filename")) {
+                return s.substring(s.indexOf("=") + 2, s.length()-1);
+            }
+        }
+        return "";
     }
 }
 
