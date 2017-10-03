@@ -1,4 +1,4 @@
-FROM webratio/groovy:2.4.4
+FROM groovy:2.4.12-jdk8
 
 RUN grape -Dgrape.root=/graperoot install ru.yandex.qatools.allure allure-bundle 1.4.22
 RUN grape -Dgrape.root=/graperoot install javax.servlet javax.servlet-api 3.0.1 
@@ -8,4 +8,6 @@ EXPOSE 80
 
 ADD allure-box.groovy /
 
-ENTRYPOINT ["groovy", "-Dgrape.root=/graperoot", "/allure-box.groovy"]
+USER root
+
+ENTRYPOINT ["groovy", "/allure-box.groovy"]
